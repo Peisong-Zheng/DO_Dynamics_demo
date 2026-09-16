@@ -431,8 +431,10 @@ try {
   assert.ok(Number(await tippedSvg.getAttribute("data-body-angle")) < 0, "the receiving end points down after tipping");
   await fallback.screenshot({ path: "test-results/fallback-bistable.png", fullPage: true });
   const vessel = fallback.locator(".scene-fallback svg").first();
-  for (const name of ["tip-line", "return-line", "eq-line"])
-    assert.ok((await vessel.locator(`[data-${name}]`).getAttribute("d")).length > 20, `missing ${name}`);
+  assert.ok((await vessel.locator("[data-tip-line]").getAttribute("d")).length > 20);
+  // The trough carries the tipping threshold only: the return line and the
+  // equilibria live in the plots, so no extra faint level lines remain.
+  assert.equal(await vessel.locator("[data-return-line], [data-eq-line]").count(), 0);
   const tipLineBefore = await vessel.locator("[data-tip-line]").getAttribute("d");
   await fallback.locator("#threshold-0").evaluate((input) => {
     input.value = "1.40";
@@ -440,7 +442,7 @@ try {
   });
   await fallback.clock.runFor(60);
   assert.notEqual(await vessel.locator("[data-tip-line]").getAttribute("d"), tipLineBefore);
-  pass("vessel waterlines for the tip threshold, return line and equilibrium follow their parameters");
+  pass("the trough marks the tipping threshold only, and that mark follows its parameter");
   // Regression: with the throttled fitting on B, dragging B's threshold used to
   // strip the baffle from the vessel and silently clear the selected button.
   const baffle = fallback.locator(".scene-fallback svg").nth(1).locator("[data-lip]");

@@ -47,9 +47,7 @@ export function createFallback(host:HTMLElement,{onThresholdChange}:{onThreshold
       <path data-shell-clear fill="#d4e2c8" fill-opacity=".24"/>
       <path data-mouth fill="none" stroke="#e5d3a1" stroke-width="7"/>
       <path data-lip fill="#d0e1d0" fill-opacity=".40" stroke="#839e85" stroke-width="1.4"/>
-      <path data-tip-line fill="#c0392b" fill-opacity=".16" stroke="#c0392b" stroke-width="2" stroke-dasharray="7 5"/>
-      <path data-return-line fill="none" stroke="#c0392b" stroke-width="1.5" stroke-dasharray="3 5" opacity=".6"/>
-      <path data-eq-line fill="none" stroke="#8a9185" stroke-width="1.5" stroke-dasharray="2 6" opacity=".85"/>
+      <path data-tip-line fill="#a15446" fill-opacity=".08" stroke="#a15446" stroke-width="2" stroke-dasharray="7 5"/>
       <path data-weight fill="none" stroke="#44533e" stroke-width="15"/><path data-weight-edge fill="none" stroke="#b5a062" stroke-width="3"/>
       <path data-pores fill="none" stroke="#596447" stroke-width="2" stroke-linecap="round" stroke-dasharray="1 12"/>
       <path data-inflow fill="none" stroke="${color}" stroke-linecap="round"/><path data-runoff fill="none" stroke="${color}"/>
@@ -71,8 +69,8 @@ export function createFallback(host:HTMLElement,{onThresholdChange}:{onThreshold
       +[-.56,.56].map(z=>pipe({x:0,y:.23,z},{x:0,y:PIVOT_HEIGHT+.08,z},19,"#b8a060")).join("");
     const pivot=project({x:0,y:PIVOT_HEIGHT,z:.70});get("pivot").innerHTML=`<circle cx="${pivot.x}" cy="${pivot.y}" r="8" fill="#8e7745"/><circle cx="${pivot.x}" cy="${pivot.y}" r="3" fill="#d8c58b"/>`;
     const inletLabel=project({x:FEED_X-.06,y:FEED_Y+.35,z:0});get("inflow-label").setAttribute("x",String(inletLabel.x));get("inflow-label").setAttribute("y",String(inletLabel.y));get("q").setAttribute("x",String(inletLabel.x));get("q").setAttribute("y",String(inletLabel.y+21));
-    let lastAngle=NaN,lastVolume=NaN,lastH=NaN,lastLineAngle=NaN;
-    const waterlineVolumes=[NaN,NaN,NaN],waterlinePoints:Point3[][]=[[],[],[]];
+    let lastAngle=NaN,lastVolume=NaN,lastH=NaN,lastLineAngle=NaN,waterlineVolume=NaN;
+    let waterlinePoints:Point3[]=[];
     let section=waterSection(.7,0),weightX=counterweightPosition(index?1:.75);
     return{svg,get,update(state:SimulationView["tanks"][number]){
       const angle=state.angle;
@@ -118,20 +116,13 @@ export function createFallback(host:HTMLElement,{onThresholdChange}:{onThreshold
       // The retaining baffle is an apparatus fitting: it follows the throttled
       // outlet, not the current balance, so the threshold slider cannot move it.
       get("lip").setAttribute("data-deployed",String(isBaffleFitted(state.params)));
-      // Waterlines for the tip threshold, the return line and the noise-free
-      // receiving equilibrium, marked on the vessel rather than only plotted.
-      const limits=[state.params.H,state.params.hReset,state.params.r/state.params.k];
+      // The tipping threshold is marked on the vessel; the return line and the
+      // equilibria stay in the plots so the trough keeps one clean level.
+      const volume=Math.min(state.params.H,CHAMBER_CAPACITY);
       let linesDirty=angle!==lastLineAngle;
       lastLineAngle=angle;
-      limits.forEach((volume,i)=>{
-        const clamped=Math.min(volume,CHAMBER_CAPACITY);
-        if(clamped===waterlineVolumes[i])return;
-        waterlineVolumes[i]=clamped;waterlinePoints[i]=receivingWaterline(clamped);linesDirty=true;
-      });
-      if(linesDirty)["tip-line","return-line","eq-line"].forEach((name,i)=>{
-        const points=waterlinePoints[i];
-        get(name).setAttribute("d",points.length>=3?pointsPath(points.map(p=>world(p,angle))):"");
-      });
+      if(volume!==waterlineVolume){waterlineVolume=volume;waterlinePoints=receivingWaterline(volume);linesDirty=true;}
+      if(linesDirty)get("tip-line").setAttribute("d",waterlinePoints.length>=3?pointsPath(waterlinePoints.map(p=>world(p,angle))):"");
       get("q").textContent=`q ${state.q.toFixed(3)}`;get("opening").textContent=`Outlet · ${state.params.kappa>=4?"wide":"throttled"}`;get("flow").textContent=state.opening>0?`flow ${(state.params.kappa*state.opening*state.h).toFixed(3)}`:"closed";
       svg.dataset.angle=angle.toFixed(6);svg.dataset.bodyAngle=(REST_ANGLE-angle).toFixed(6);svg.dataset.volume=state.h.toFixed(6);
       svg.setAttribute("aria-label",`Reservoir ${index?"B":"A"}: stored water ${state.h.toFixed(3)}, tipping threshold ${state.params.H.toFixed(2)}, bamboo angle ${((REST_ANGLE-angle)*180/Math.PI).toFixed(1)} degrees.`);

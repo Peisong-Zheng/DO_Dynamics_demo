@@ -36,7 +36,6 @@ export function createTank(color: number, reducedMotion = false): TankVisual {
   const surfaceMat = new THREE.MeshStandardMaterial({color,transparent:true,opacity:.88,roughness:.20,side:THREE.DoubleSide,depthWrite:false});
   const streamMat = new THREE.MeshStandardMaterial({color,transparent:true,opacity:.86,roughness:.21});
   const lineMat = new THREE.LineBasicMaterial({color:0x9c8f6f,transparent:true,opacity:.85});
-  const edgeMat = new THREE.LineBasicMaterial({color:0x9aa3a8,transparent:true,opacity:.75});
   const v = (x:number,y:number,z=0) => new THREE.Vector3(x,y,z);
   const rod = (parent:THREE.Group,a:THREE.Vector3,b:THREE.Vector3,r:number,mat:THREE.Material) => cylinderBetween(parent,a,b,r,mat);
   function ring(parent:THREE.Group,x:number,r:number,tube:number,mat:THREE.Material) {
@@ -152,10 +151,8 @@ export function createTank(color: number, reducedMotion = false): TankVisual {
   const mouthVertices=[...chamber.mouth,...mouthOuter];
   const mouthFaces=chamber.mouth.map((_,i)=>[i,(i+1)%chamber.mouth.length,(i+1)%chamber.mouth.length+chamber.mouth.length,i+chamber.mouth.length]);
   const rim=createPolyhedronMesh(cut);rim.update(mouthVertices,mouthFaces);body.add(rim.mesh);
-  for(const theta of [0,Math.PI/2,Math.PI,3*Math.PI/2]) {
-    const y=CHAMBER_RADIUS*Math.cos(theta),z=CHAMBER_RADIUS*Math.sin(theta);
-    body.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([v(CHAMBER_BACK,y,z),v(CHAMBER_END-BEVEL_SLOPE*y,y,z)]),edgeMat));
-  }
+  // No drawn generatrices: the double-sided glass shell already closes the
+  // silhouette, and interior axial lines only added clutter.
   const mouthLine=new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(chamber.mouth.map(p=>v(p.x,p.y,p.z))),lineMat);body.add(mouthLine);
   // The retaining lip belongs to the apparatus only while a configuration really
   // has two resting branches, so it is drawn in and out with a short rise from
@@ -166,18 +163,25 @@ export function createTank(color: number, reducedMotion = false): TankVisual {
   const lipEdgeMaterial=new THREE.LineBasicMaterial({color:0x87a18b,transparent:true,opacity:.8});
   const lipEdgePositions=new THREE.Float32BufferAttribute(new Float32Array(6),3);
   const lipEdgeGeometry=new THREE.BufferGeometry();lipEdgeGeometry.setAttribute("position",lipEdgePositions);
-  const lipEdge=new THREE.Line(lipEdgeGeometry,lipEdgeMaterial);lipEdge.frustumCulled=false;body.add(lipEdge);
+  const lipEdge=new THREE.Line(lipEdgeGeometry,lipEdgeMaterial);
+  lipEdge.frustumCulled=false;lipEdge.renderOrder=7;lipEdgeMaterial.depthWrite=false;body.add(lipEdge);
   const lipVertex=(p:Point3,growth:number):Point3=>{const y=lipLowest+(p.y-lipLowest)*growth;return{x:CHAMBER_END-BEVEL_SLOPE*y,y,z:p.z};};
   const lipRim=chamber.lip.filter(p=>Math.abs(p.y-lipHighest)<1e-8).slice(0,2);
-  const lipBoundary=chamber.lip.map(p=>lipVertex(p,1));
-  const pingCentre=lipBoundary.reduce((sum,p)=>({x:sum.x+p.x/lipBoundary.length,y:sum.y+p.y/lipBoundary.length,z:sum.z+p.z/lipBoundary.length}),{x:0,y:0,z:0});
+  // The ping base follows the growing baffle, so its outline is never drawn at
+  // full size while the baffle itself is still rising.
+  const lipCurrent:Point3[]=chamber.lip.map(()=>({x:0,y:0,z:0}));
+  let lipCentre={x:0,y:0,z:0};
   const pingMaterial=new THREE.LineBasicMaterial({color:0xbc8544,transparent:true,opacity:0,depthWrite:false});
   const ping=makeLine(body,pingMaterial,8);
-  const pingPoints:Point3[]=lipBoundary.map(p=>({...p}));
+  const pingPoints:Point3[]=lipCurrent.map(p=>({...p}));
   function deployLip(progress:number) {
     const growth=easeInOutCubic(progress);
-    lip.update(chamber.lip.map(p=>lipVertex(p,growth)),[lipFace]);
+    for(let i=0;i<lipCurrent.length;i++)lipCurrent[i]=lipVertex(chamber.lip[i],growth);
+    lip.update(lipCurrent,[lipFace]);
     lip.mesh.visible=progress>0.002;
+    let cx=0,cy=0,cz=0;
+    for(const p of lipCurrent){cx+=p.x;cy+=p.y;cz+=p.z;}
+    lipCentre={x:cx/lipCurrent.length,y:cy/lipCurrent.length,z:cz/lipCurrent.length};
     lipRim.forEach((p,i)=>{const point=lipVertex(p,growth);lipEdgePositions.setXYZ(i,point.x,point.y,point.z);});
     lipEdgePositions.needsUpdate=true;
     lipEdge.visible=progress>0.002;
@@ -223,16 +227,13 @@ export function createTank(color: number, reducedMotion = false): TankVisual {
   // Waterlines for the tip threshold, the return line and the noise-free
   // receiving equilibrium, drawn on the vessel itself, so how far the surface
   // still is from the threshold is visible rather than read off two numbers.
-  // The threshold itself is the emphatic one: a dashed band, not a hairline, in a
-  // muted oxide red that stays legible against the bamboo without shouting.
+  // Only the tipping threshold is marked on the vessel: a dashed band in a muted
+  // oxide red that stays legible against the bamboo without shouting. The return
+  // line and both equilibria are left to the plots.
   const thresholdMaterial=new THREE.MeshBasicMaterial({color:0xa15446,transparent:true,opacity:.9,depthWrite:false,side:THREE.DoubleSide});
   const thresholdBand=makeBand(thresholdMaterial,7,body);
   const thresholdFillMaterial=new THREE.MeshBasicMaterial({color:0xa15446,transparent:true,opacity:.06,depthWrite:false,side:THREE.DoubleSide});
   const thresholdFill=makeBand(thresholdFillMaterial,6,body);
-  const waterlines=[
-    new THREE.LineDashedMaterial({color:0xa15446,dashSize:.022,gapSize:.038,transparent:true,opacity:.55,depthWrite:false}),
-    new THREE.LineDashedMaterial({color:0x8a9185,dashSize:.014,gapSize:.045,transparent:true,opacity:.80,depthWrite:false}),
-  ].map(material=>({material,volume:NaN,...makeLine(body,material,7)}));
 
   const fluid=createPolyhedronMesh(water);fluid.mesh.renderOrder=3;group.add(fluid.mesh);
   const surfaceEdgeMaterial=new THREE.LineBasicMaterial({color:new THREE.Color(color).multiplyScalar(.5),transparent:true,opacity:.6,depthWrite:false});
@@ -242,7 +243,7 @@ export function createTank(color: number, reducedMotion = false): TankVisual {
   const seep=createStream(group,streamMat),controlled=createStream(group,streamMat),spill=createStream(group,streamMat);
   let previousVolume=NaN,previousAngle=NaN,previousThreshold=NaN;
   let lipProgress=0,lipFlash=0,tipFlash=0,previousEvents=0,lastFrame=performance.now();
-  const waterlineVolumes=[NaN,NaN,NaN];
+  let thresholdVolume=NaN;
   let level=0;
   const poolY=.21;
   const anchors={weight:{x:0,y:0,z:0},leak:{x:0,y:0,z:0},outlet:{x:0,y:0,z:0}};
@@ -265,29 +266,27 @@ export function createTank(color: number, reducedMotion = false): TankVisual {
       const pulse=reducedMotion?(lipFlash>0?1:0):flash*(.5-.5*Math.cos(2*Math.PI*LIP_BLINKS*(1-flash)));
       applyLipLook(lipProgress,pulse);
       const pingProgress=reducedMotion?1:Math.min(1,(1-flash)*2.2);
-      const pingScale=1+.5*pingProgress;
-      for(let i=0;i<pingPoints.length;i++){const p=lipBoundary[i];pingPoints[i]={x:pingCentre.x+(p.x-pingCentre.x)*pingScale,y:pingCentre.y+(p.y-pingCentre.y)*pingScale,z:p.z};}
-      updateLine(ping,pingPoints);
+      if(flash>.003){
+        const pingScale=1+.5*pingProgress;
+        for(let i=0;i<pingPoints.length;i++){
+          const p=lipCurrent[i];
+          pingPoints[i]={x:lipCentre.x+(p.x-lipCentre.x)*pingScale,y:lipCentre.y+(p.y-lipCentre.y)*pingScale,z:p.z};
+        }
+        updateLine(ping,pingPoints);
+      }
       pingMaterial.opacity=flash>.003?.5*(1-pingProgress)*Math.min(1,flash*4):0;
       ping.line.visible=ping.line.visible&&pingMaterial.opacity>0;
       body.rotation.z=REST_ANGLE-angle;
       if(state.params.H!==previousThreshold) {weight.position.x=counterweightPosition(state.params.H);previousThreshold=state.params.H;}
       const weightPoint=rotatePoint({x:weight.position.x,y:0,z:0},angle);
       Object.assign(anchors.weight,weightPoint,{y:weightPoint.y+PIVOT_HEIGHT});
-      // The three marks only move when the parameter that sets them moves.
-      const waterlineLimits=[state.params.H,state.params.hReset,state.params.r/state.params.k];
-      if(waterlineLimits[0]!==waterlineVolumes[0]){
-        waterlineVolumes[0]=waterlineLimits[0];
-        const mark=receivingWaterline(Math.min(waterlineLimits[0],CHAMBER_CAPACITY));
+      // The mark only moves when the parameter that sets it moves.
+      if(state.params.H!==thresholdVolume){
+        thresholdVolume=state.params.H;
+        const mark=receivingWaterline(Math.min(state.params.H,CHAMBER_CAPACITY));
         updateBand(thresholdBand,mark,.020,{on:2,off:1});
         updateDisc(thresholdFill,mark);
       }
-      waterlines.forEach((line,i)=>{
-        const volume=Math.min(waterlineLimits[i+1],CHAMBER_CAPACITY);
-        if(volume===waterlineVolumes[i+1])return;
-        waterlineVolumes[i+1]=volume;
-        updateLine(line,receivingWaterline(volume),0,true);
-      });
       // A real tip is the one moment worth noticing, so the threshold mark blinks
       // and the water outline brightens while the surface crosses it.
       if(state.eventCount>previousEvents)tipFlash=TIP_FLASH;
