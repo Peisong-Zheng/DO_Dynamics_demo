@@ -1,0 +1,38 @@
+#tank-scene { position: relative; height: 400px; isolation: isolate; overflow: hidden; }
+#tank-scene > canvas { display: block; width: 100%; height: 100%; }
+.scene-annotations { position: absolute; inset: 0; pointer-events: none; color: #4b5157; font-size: 12px; line-height: 1.4; font-variant-numeric: tabular-nums; }
+.scene-annotation { position: absolute; white-space: nowrap; text-align: center; transform: translate(-50%, 0); }
+.scene-annotation strong { font-weight: 550; }
+.scene-annotation .annotation-value { display: block; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; line-height: 1.55; }
+.annotation-inflow { transform: translate(-50%, -50%); }
+.annotation-counterweight { transform: translate(-50%, -100%); }
+.annotation-counterweight::after { content: ""; position: absolute; left: calc(50% + var(--weight-leader-offset, 0px)); top: calc(100% + 2px); width: 1px; height: 12px; background: #a6afa3; }
+.scene-leaders { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.scene-leaders path { fill: none; stroke: #9aa99c; stroke-width: .7; }
+.annotation-counterweight .annotation-value { color: #8a6a3f; }
+.annotation-pivot { color: #6b7076; font-size: 12px; }
+.scene-fallback-notice { position: absolute; top: 2px; width: 100%; text-align: center; color: #65736a; font-size: 11px; padding-inline: 16px; line-height: 1.4; z-index: 2; }
+.scene-fallback { width: 100%; height: 100%; display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); grid-template-rows: minmax(0,1fr); }
+.scene-fallback svg { width: 100%; height: 100%; min-height: 0; overflow: visible; font-family: inherit; }
+.scene-fallback text { fill: #485e53; font-size: 20px; }
+.scene-fallback .fallback-small { font-size: 18px; }
+/* The 2D retaining lip rises out of the lower lip of the mouth, like the 3D one. */
+.scene-fallback [data-lip] { transform-box: fill-box; transform-origin: 50% 100%; transition: opacity .45s ease, transform .45s cubic-bezier(.2,.7,.3,1); }
+.scene-fallback [data-lip][data-deployed="false"] { opacity: 0; transform: scaleY(.02); }
+@media (max-width: 699px) {
+  #tank-scene { height: 800px; }
+  .scene-fallback { grid-template-columns: 1fr; grid-template-rows: repeat(2,minmax(0,1fr)); }
+  .scene-fallback svg { padding-top: 88px; padding-bottom: 6px; }
+  .scene-fallback-notice { top: auto; bottom: 3px; font-size: 10px; }
+  .scene-annotation { font-size: 12px; }
+}
+.counterweight-handle { position:absolute; width:44px; height:44px; transform:translate(-50%,-50%); z-index:4; border:0; border-radius:50%; background:transparent; cursor:grab; touch-action:none; outline:none; }
+.counterweight-handle:hover,.counterweight-handle:focus-visible { box-shadow:0 0 0 2px #789175,0 0 0 5px #f8f8f3c7; }
+.counterweight-handle[data-dragging="true"] { cursor:grabbing; box-shadow:0 0 0 2px #967846; }
+.counterweight-handle[aria-disabled="true"] { pointer-events:none; }
+.annotation-counterweight::after { display:none; }
+@media (max-width: 699px) {
+  /* The pivot label carries the least information and crowds the mobile view. */
+  .annotation-pivot { display: none; }
+}
+
